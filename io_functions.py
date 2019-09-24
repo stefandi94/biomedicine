@@ -1,80 +1,80 @@
-import glob
 import os
 import os.path as osp
-import numpy as np
 from PIL import Image
-
+from classes import Point, Bone, Joint
 from settings import IMAGE_DIR, POINTS_DIR
 
 
-def find_landmarks_and_write_them_to_a_file(dir):
+def find_landmarks_and_write_them_to_a_file(path):
     """Takes pictures with marked landmarks and creates a subdirectory containing .pts files with coordinate of
     those landmarks
     Format of created files:
 
-    Numbers of point: <number of points>
-    {
+    Upper bone
+    [
     ...
     xi yi
     ...
-    }
+    ]
     \n
-    \n
-
+    Lower bone
+    [
     ...
     xi yi
     ...
-    }
+    ]
     """
 
     image_names = []
-    files = os.listdir(dir)
+    files = os.listdir(path)
     for file in files:
         if file.endswith('.png'):
-           image_names.append(file)
-    # image_names = glob.glob('*.png')
+            image_names.append(file)
 
     if not osp.exists(POINTS_DIR):
         os.makedirs(POINTS_DIR)
 
-
     for image in image_names:
-        
         # separate path into filepath and extension
         filename, file_extension = os.path.splitext(image)
-
         im = Image.open(osp.join(IMAGE_DIR, image))
         w, h = im.size
 
-        black_coor = []
-        white_coor = []
+        lower_bone = []
+        upper_bone = []
 
         for i in range(h):
             for j in range(w):
                 v = im.getpixel((j, i))
-                if 0 == v[0]:
-                    black_coor.append(j)
-                    black_coor.append(i)
-                if 255 == v[0]:
-                    white_coor.append(j)
-                    white_coor.append(i)
 
-        write_points_in_file(filename, black_coor + white_coor)
+                # We made a mistake while marking so not all markers are true green or true red
+                # To bypass this problem only pixels that are 90% green or red are taken
+                # +1 is added to sum to avoid division by zero. It does not change result so no pixel is misclassified
+
+                if v[0]/(sum(v[:3])+1) > 0.9:
+                    lower_bone.append(j)
+                    lower_bone.append(i)
+                if v[1]/(sum(v[:3])+1) > 0.9:
+                    upper_bone.append(j)
+                    upper_bone.append(i)
+
+        myfile = open(osp.join(POINTS_DIR, filename + '.pts'), 'w')
+        write_points_from_multiple_list_in_file(myfile, [upper_bone, lower_bone])
 
 
-def write_points_from_multiple_list_in_file(filename, lst):
-    myfile = open(filename, 'w')
-
+def write_points_from_multiple_list_in_file(myfile, lst):
     for i, l in enumerate(lst):
         if 0 == i:
+            myfile.write('Upper bone')
             write_points_in_file(myfile, l)
         else:
-            write_points_in_file(myfile, l, True)
+            myfile.write('\n\nLower bone')
+            write_points_in_file(myfile, l)
 
     myfile.close()
 
 
-def write_points_in_file(filename, list_of_points):
+def write_points_in_file(myfile, list_of_points):
     """
     Writes list of point pair-wise to the file
     if add_space_between, 2 blank lines will be added
@@ -82,32 +82,49 @@ def write_points_in_file(filename, list_of_points):
     :param list_of_points:
     :return:
     """
+    myfile.write('\n[')
+    for i in range(len(list_of_points)):
+        if 0 == i % 2:
+            myfile.write('\n')
+        myfile.write("{0}".format(list_of_points[i]))
+        if i != len(list_of_points) - 1:
+            myfile.write(' ')
+        else:
+            myfile.write('\n]')
 
-    myfile = open(osp.join(POINTS_DIR, filename + '.pts'), 'w')
-    columns = ('a ' *len(list_of_points)).split()
-    for col in columns:
-        myfile.write("{} ".format(col))
-    myfile.write("\n")
 
-    for point in list_of_points:
-        myfile.write("{0} ".format(point))
+def read_file(path):
+    with open(path, 'r') as file:
+        bones = []
+        for line in file.readlines():
+            line = line.rstrip()
+            tokens = line.split(' ')
+            if '[' == tokens[0]:
+                list_of_points = []
+            elif ']' == tokens[0]:
+                bones.append(Bone(list_of_points))
+            else:
+                try:
+                    x = int(tokens[0])
+                    y = int(tokens[1])
+                    point = Point(x, y)
+                    list_of_points.append(point)
+                except:
+                    pass
+        joint = Joint(bones[0], bones[1])
+    return joint
 
 
-def pts_to_vectors(dir):
-    """Takes path to directory where .pts files are and returns dictionary where filename is a key and value is list
-    of nx2 matrices where first matrix represents coordinates of upper (black) joint and second of lower (white) joint"""
-
+def read_files(path):
     points_files = []
-    files = os.listdir(dir)
+    files = os.listdir(path)
     for file in files:
         if file.endswith('.pts'):
             points_files.append(file)
 
-    dt = {}
-
+    joints = []
     for filename in points_files:
-        with open(osp.join(POINTS_DIR, filename), 'r') as file:
-            points = file.readline().split("")
-        dt[filename] = points
+        joint = read_file(osp.join(POINTS_DIR, filename))
+        joints.append(joint)
 
-    return dt
+    return joints
