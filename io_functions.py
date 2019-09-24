@@ -7,7 +7,7 @@ from PIL import Image
 from settings import IMAGE_DIR, POINTS_DIR
 
 
-def find_landmarks_and_write_them_to_a_file(path):
+def find_landmarks_and_write_them_to_a_file(dir):
     """Takes pictures with marked landmarks and creates a subdirectory containing .pts files with coordinate of
     those landmarks
     Format of created files:
@@ -28,7 +28,7 @@ def find_landmarks_and_write_them_to_a_file(path):
     """
 
     image_names = []
-    files = os.listdir(path)
+    files = os.listdir(dir)
     for file in files:
         if file.endswith('.png'):
            image_names.append(file)
@@ -93,12 +93,12 @@ def write_points_in_file(filename, list_of_points):
         myfile.write("{0} ".format(point))
 
 
-def pts_to_vectors(path):
+def pts_to_vectors(dir):
     """Takes path to directory where .pts files are and returns dictionary where filename is a key and value is list
     of nx2 matrices where first matrix represents coordinates of upper (black) joint and second of lower (white) joint"""
 
     points_files = []
-    files = os.listdir(path)
+    files = os.listdir(dir)
     for file in files:
         if file.endswith('.pts'):
             points_files.append(file)
